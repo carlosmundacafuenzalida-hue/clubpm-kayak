@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm *)",
+      "Bash(npx tsc *)",
+      "Bash(npx tsc)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git log)"
+    ]
+  }
+}

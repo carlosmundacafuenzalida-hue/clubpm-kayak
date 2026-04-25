@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Bash(node *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl *)",
+      "Bash(npx tsx *)",
+      "Bash(git -C C:/proyectos/club-cuotas ls-files --error-unmatch .env.local)",
+      "Bash(git -C C:/proyectos/club-cuotas ls-files --error-unmatch .env.local.example)",
+      "Bash(git -C C:/proyectos/club-cuotas rev-parse --is-inside-work-tree)",
+      "Bash(git -C C:/proyectos/club-cuotas log --oneline -1)"
+    ]
+  }
+}

@@ -1,28 +1,55 @@
-export interface SessionData {
-  rut: string
-  nombre: string
-  esAdmin: boolean
+import { SignJWT, jwtVerify } from 'jose';
+import { cookies } from 'next/headers';
+
+const COOKIE_NAME = 'clubpm_session';
+const ALG = 'HS256';
+
+function getKey() {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error('SESSION_SECRET no está definido en .env.local');
+  return new TextEncoder().encode(secret);
 }
 
-const SESSION_KEY = 'club_session'
+export type Session = {
+  socio_id: string;
+  rut: string;
+  nombre: string;
+  es_admin: boolean;
+};
 
-export function saveSession(data: SessionData): void {
-  if (typeof window === 'undefined') return
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(data))
+/** Crea sesión: firma JWT y la mete en cookie httpOnly. Llamar desde Server Action / Route Handler. */
+export async function createSession(payload: Session) {
+  const token = await new SignJWT(payload as any)
+    .setProtectedHeader({ alg: ALG })
+    .setIssuedAt()
+    .setExpirationTime('30d')
+    .sign(getKey());
+
+  const c = await cookies();
+  c.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30, // 30 días
+  });
 }
 
-export function getSession(): SessionData | null {
-  if (typeof window === 'undefined') return null
-  const raw = sessionStorage.getItem(SESSION_KEY)
-  if (!raw) return null
+/** Lee la sesión activa, o null si no hay/expiró. */
+export async function getSession(): Promise<Session | null> {
   try {
-    return JSON.parse(raw) as SessionData
+    const c = await cookies();
+    const token = c.get(COOKIE_NAME)?.value;
+    if (!token) return null;
+    const { payload } = await jwtVerify(token, getKey());
+    return payload as unknown as Session;
   } catch {
-    return null
+    return null;
   }
 }
 
-export function clearSession(): void {
-  if (typeof window === 'undefined') return
-  sessionStorage.removeItem(SESSION_KEY)
+/** Cierra sesión. */
+export async function destroySession() {
+  const c = await cookies();
+  c.delete(COOKIE_NAME);
 }

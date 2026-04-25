@@ -1,26 +1,44 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    @apply bg-paper text-ink antialiased font-sans;
   }
+  ::selection { background: #F5C842; color: #0D3D20; }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md text-sm font-semibold transition cursor-pointer border-0;
+  }
+  .btn-primary {
+    @apply bg-bosque text-white shadow-md hover:bg-verde hover:-translate-y-0.5;
+  }
+  .btn-accent {
+    @apply bg-kayak text-bosque shadow-md hover:bg-kayak-deep hover:-translate-y-0.5;
+  }
+  .btn-ghost {
+    @apply bg-white text-bosque border border-line hover:border-bosque hover:bg-paper-warm;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium;
+  }
+  .badge::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+  }
+  .badge-ok { @apply bg-verde-tint text-verde; }
+  .badge-ok::before { background: #1D6B3A; }
+  .badge-warn { @apply bg-rojo-soft text-rojo; }
+  .badge-warn::before { background: #C0392B; }
+  .badge-pending { @apply bg-kayak-soft text-kayak-deep; }
+  .badge-pending::before { background: #C49A1A; }
+  .badge-info { @apply bg-rio-soft text-rio; }
+  .badge-info::before { background: #2E86AB; }
+  .badge-mute { @apply bg-roca-soft text-roca; }
+  .badge-mute::before { background: #8B6F47; }
+  .panel {
+    @apply bg-white border border-line rounded-lg overflow-hidden;
+  }
 }

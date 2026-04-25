@@ -1,73 +1,157 @@
-import { supabase, type Movimiento, type CuotaConfig } from './supabase'
+import type { Movimiento, Socio, CuotaConfig } from './supabase';
 
-export type EstadoMes = 'al_dia' | 'parcial' | 'impago'
-export type EstadoGeneral = 'al_dia' | 'parcial' | 'moroso'
-
-export const INICIO_CUOTAS = '2024-08-01'
-
-export function calcularEstadoMes(pagado: number, esperado: number): EstadoMes {
-  if (pagado >= esperado) return 'al_dia'
-  if (pagado > 0) return 'parcial'
-  return 'impago'
+/** Mes en formato 'YYYY-MM-01' (primer día del mes). */
+export function mesActual(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-export function calcularEstadoGeneral(estados: EstadoMes[]): EstadoGeneral {
-  if (estados.every(e => e === 'al_dia')) return 'al_dia'
-  if (estados.some(e => e === 'impago')) return 'moroso'
-  return 'parcial'
-}
-
-export function generarMesesDesdeInicio(hasta: Date = new Date()): string[] {
-  const meses: string[] = []
-  const current = new Date(INICIO_CUOTAS + 'T12:00:00')
-  current.setDate(1)
-  // Normalise `hasta` to noon local time on the 1st of its month so that
-  // date-string inputs like new Date('2024-10-01') (parsed as UTC midnight)
-  // are not shifted into the previous month in negative-offset timezones.
-  const limite = new Date(
-    hasta.getUTCFullYear(),
-    hasta.getUTCMonth(),
-    1,
-    12,
-  )
-  while (current <= limite) {
-    meses.push(current.toISOString().slice(0, 10))
-    current.setMonth(current.getMonth() + 1)
+/** Devuelve los últimos N meses como array de 'YYYY-MM-01' (más reciente primero). */
+export function ultimosMeses(n: number): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  d.setDate(1);
+  for (let i = 0; i < n; i++) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`);
+    d.setMonth(d.getMonth() - 1);
   }
-  return meses
+  return out;
 }
 
-export async function getMovimientosDeSocio(socioId: string): Promise<Movimiento[]> {
-  const { data, error } = await supabase
-    .from('movimientos')
-    .select('*')
-    .eq('socio_id', socioId)
-    .eq('tipo', 'pago_cuota')
-    .order('fecha_registro', { ascending: false })
-  if (error) throw error
-  return data ?? []
+/** Formatea un mes 'YYYY-MM-01' a 'abr 2026'. */
+export function formatMes(mes: string): string {
+  const [y, m] = mes.split('-');
+  const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return `${meses[parseInt(m, 10) - 1]} ${y}`;
 }
 
-export async function getCuotasConfig(): Promise<CuotaConfig[]> {
-  const { data, error } = await supabase
-    .from('cuotas_config')
-    .select('*')
-    .order('mes')
-  if (error) throw error
-  return data ?? []
+/** Formatea pesos chilenos. */
+export function formatCLP(monto: number): string {
+  return new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: 'CLP',
+    maximumFractionDigits: 0,
+  }).format(monto);
 }
 
-export async function insertMovimiento(
-  mov: Omit<Movimiento, 'id' | 'creado_en'>
-): Promise<void> {
-  const { error } = await supabase.from('movimientos').insert(mov)
-  if (error) throw error
+export type EstadoSocio = 'al_dia' | 'pendiente' | 'moroso' | 'inactivo' | 'becado';
+
+/**
+ * Calcula el estado de un socio para un mes dado.
+ * - Inactivo: socio.activo = false
+ * - Moroso: meses adeudados >= 1 (cuenta meses pasados sin pago)
+ * - Pendiente: este mes aún no paga, pero está al día con meses anteriores
+ * - Al día: pagó este mes
+ */
+export function calcularEstado(
+  socio: Socio,
+  movimientos: Movimiento[],
+  cuotasConfig: CuotaConfig[],
+  mesReferencia: string = mesActual()
+): { estado: EstadoSocio; mesesAdeudados: string[]; montoAdeudado: number } {
+  if (!socio.activo) {
+    return { estado: 'inactivo', mesesAdeudados: [], montoAdeudado: 0 };
+  }
+
+  const ingreso = socio.fecha_ingreso.slice(0, 7) + '-01';
+
+  // Lista de meses que el socio debió pagar (desde su ingreso hasta el mes de referencia).
+  // Importante: T12:00:00 evita que el timezone tire la fecha al día anterior.
+  const mesesEsperados: string[] = [];
+  let cursor = new Date(ingreso + 'T12:00:00');
+  const fin = new Date(mesReferencia + 'T12:00:00');
+  while (cursor <= fin) {
+    mesesEsperados.push(
+      `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-01`
+    );
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  // Pagos del socio (tipo pago_cuota) agrupados por mes_cuota.
+  const mesesPagados = new Set(
+    movimientos
+      .filter((m) => m.socio_id === socio.id && m.tipo === 'pago_cuota' && m.mes_cuota)
+      .map((m) => m.mes_cuota as string)
+  );
+
+  // Meses del pasado adeudados (sin contar el mes actual).
+  const mesesAdeudados = mesesEsperados
+    .filter((m) => m < mesReferencia && !mesesPagados.has(m));
+
+  const montoAdeudado = mesesAdeudados.reduce((sum, mes) => {
+    const config = cuotasConfig.find((c) => c.mes === mes);
+    return sum + (config?.monto ?? 0);
+  }, 0);
+
+  if (mesesAdeudados.length > 0) {
+    return { estado: 'moroso', mesesAdeudados, montoAdeudado };
+  }
+
+  if (mesesPagados.has(mesReferencia)) {
+    return { estado: 'al_dia', mesesAdeudados: [], montoAdeudado: 0 };
+  }
+
+  return { estado: 'pendiente', mesesAdeudados: [], montoAdeudado: 0 };
 }
 
-export async function updateMovimiento(
-  id: string,
-  patch: Partial<Omit<Movimiento, 'id' | 'creado_en'>>
-): Promise<void> {
-  const { error } = await supabase.from('movimientos').update(patch).eq('id', id)
-  if (error) throw error
+/** Resumen del dashboard. */
+export type DashboardSummary = {
+  sociosActivos: number;
+  pagaronEsteMes: number;
+  morosos: number;
+  inactivos: number;
+  recaudadoMes: number;
+  morososDetalle: Array<{
+    socio: Socio;
+    mesesAdeudados: string[];
+    montoAdeudado: number;
+  }>;
+};
+
+export function calcularDashboard(
+  socios: Socio[],
+  movimientos: Movimiento[],
+  cuotasConfig: CuotaConfig[]
+): DashboardSummary {
+  const mes = mesActual();
+  let sociosActivos = 0;
+  let pagaronEsteMes = 0;
+  let morosos = 0;
+  let inactivos = 0;
+  let recaudadoMes = 0;
+  const morososDetalle: DashboardSummary['morososDetalle'] = [];
+
+  for (const socio of socios) {
+    const r = calcularEstado(socio, movimientos, cuotasConfig, mes);
+    if (r.estado === 'inactivo') { inactivos++; continue; }
+    sociosActivos++;
+    if (r.estado === 'al_dia') pagaronEsteMes++;
+    if (r.estado === 'moroso') {
+      morosos++;
+      morososDetalle.push({
+        socio,
+        mesesAdeudados: r.mesesAdeudados,
+        montoAdeudado: r.montoAdeudado,
+      });
+    }
+  }
+
+  // Recaudación del mes = suma de pagos (pago_cuota + pago_extra) registrados en este mes calendario.
+  const inicioMes = new Date(mes + 'T12:00:00');
+  const finMes = new Date(mes + 'T12:00:00');
+  finMes.setMonth(finMes.getMonth() + 1);
+  recaudadoMes = movimientos
+    .filter((m) => {
+      const fr = new Date(m.fecha_registro + 'T12:00:00');
+      return (
+        (m.tipo === 'pago_cuota' || m.tipo === 'pago_extra') &&
+        fr >= inicioMes &&
+        fr < finMes
+      );
+    })
+    .reduce((sum, m) => sum + Number(m.monto), 0);
+
+  morososDetalle.sort((a, b) => b.mesesAdeudados.length - a.mesesAdeudados.length);
+
+  return { sociosActivos, pagaronEsteMes, morosos, inactivos, recaudadoMes, morososDetalle };
 }
