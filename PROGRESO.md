@@ -151,12 +151,15 @@ README-DEPLOY.md                  ← guía manual de deploy
 - `.github/workflows/ci.yml`: trigger en push/PR a `main`, Node 20 con cache npm, jobs `npm ci --legacy-peer-deps` → `tsc --noEmit` → `npm test` → `npm run build`. Env vars dummy para que el build pase sin contactar Supabase.
 - **Lint omitido en CI**: `next lint` fue removido en Next 16. Pendiente decidir si configurar `eslint` v9 + `eslint-config-next` con flat config.
 
-### Sprint 7 — Producción en Vercel (esta sesión)
+### Sprint 7 — Producción en Vercel (commits `c92ee9b`, `50d237b`, `09a4451`)
 - Repo creado en GitHub: `carlosmundacafuenzalida-hue/clubpm-kayak`, push de los commits del Sprint 6 a `origin/main`.
 - Proyecto importado en Vercel y deploy verde: `https://clubpm-kayak.vercel.app`.
 - Login end-to-end OK (RUT + PIN del admin → dashboard con datos reales).
 - Variables de entorno cargadas en Vercel: 4 críticas (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_ADMIN_RUT`, `SESSION_SECRET`) + 3 opcionales (`NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, `ADMIN_TELEFONO`).
 - Cron `resumen-morosos` se dispara **manualmente** vía curl con el `CRON_SECRET` (no hay scheduler en `vercel.json` aún — opción C en el roadmap).
+- **Fix middleware (`50d237b`):** `/api/cron` agregado a la lista `PUBLIC` en `middleware.ts`. Antes el middleware redirigía a `/login` antes de que el route handler pudiera validar el header `Authorization`.
+- **Fix mensaje cron (`09a4451`):** el resumen mostraba `desde {último mes adeudado}` cuando lo correcto era `desde {primer mes adeudado}`. Cambio en `app/api/cron/resumen-morosos/route.ts:44` de `[length-1]` a `[0]`.
+- Verificación end-to-end: 24 morosos detectados, total $2.163.000, `admin_url` apuntando a `wa.me/56977779177` con el mensaje pre-cargado, recibido en WhatsApp del admin.
 
 ---
 
