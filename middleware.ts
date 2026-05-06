@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const PUBLIC = ['/login', '/api/login', '/mi'];
+const PUBLIC = ['/login', '/api/login', '/mi', '/api/cron'];
 const COOKIE = 'clubpm_session';
 
 export async function middleware(req: NextRequest) {
