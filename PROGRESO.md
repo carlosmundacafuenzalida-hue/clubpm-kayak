@@ -27,7 +27,7 @@
 | Cron resumen morosos          | ✅ Listo   | `/api/cron/resumen-morosos` protegido por `CRON_SECRET`      |
 | Tests unitarios               | ✅ Listo   | Vitest, 22 casos en `lib/__tests__/`                         |
 | CI                            | ✅ Listo   | GitHub Actions: typecheck + test + build en push/PR a main   |
-| Deploy a Vercel               | ⏳ Manual  | Config lista (`vercel.json`, README-DEPLOY.md). Falta el push a GitHub e import en Vercel |
+| Deploy a Vercel               | ✅ Listo   | Live en <https://clubpm-kayak.vercel.app>. Repo en `carlosmundacafuenzalida-hue/clubpm-kayak` |
 | Plantillas WhatsApp editables | ⛔ Pendiente | Mencionado en CLAUDE.md como Fase 3                          |
 | Notificaciones automatizadas  | ⛔ Pendiente | El cron existe pero no manda mensajes solo                   |
 
@@ -142,7 +142,7 @@ README-DEPLOY.md                  ← guía manual de deploy
 - Cron `resumen-morosos` revisado: usa `dynamic = 'force-dynamic'`, sin globals mutables ni filesystem → serverless-safe.
 - `README-DEPLOY.md` con guía manual de 9 secciones (cuenta Vercel, push a GitHub, import, env vars, deploy, dominio, cron, checklist post-deploy).
 
-### Sprint 6 — Tests + CI (esta sesión, sin commit aún)
+### Sprint 6 — Tests + CI (commits `31b1356`, `f4976af`)
 - Instalado: `vitest`, `@vitest/ui`, `jsdom`, `@testing-library/react`.
 - `vitest.config.ts` con alias `@/` y env `jsdom`.
 - `lib/__tests__/rut.test.ts` (13 casos): normalización, formato, validación con DV, round-trip de 24 RUTs sintéticos generados con `calcDv`.
@@ -150,6 +150,13 @@ README-DEPLOY.md                  ← guía manual de deploy
 - Scripts en `package.json`: `test`, `test:watch`, `test:ui`.
 - `.github/workflows/ci.yml`: trigger en push/PR a `main`, Node 20 con cache npm, jobs `npm ci --legacy-peer-deps` → `tsc --noEmit` → `npm test` → `npm run build`. Env vars dummy para que el build pase sin contactar Supabase.
 - **Lint omitido en CI**: `next lint` fue removido en Next 16. Pendiente decidir si configurar `eslint` v9 + `eslint-config-next` con flat config.
+
+### Sprint 7 — Producción en Vercel (esta sesión)
+- Repo creado en GitHub: `carlosmundacafuenzalida-hue/clubpm-kayak`, push de los commits del Sprint 6 a `origin/main`.
+- Proyecto importado en Vercel y deploy verde: `https://clubpm-kayak.vercel.app`.
+- Login end-to-end OK (RUT + PIN del admin → dashboard con datos reales).
+- Variables de entorno cargadas en Vercel: 4 críticas (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_ADMIN_RUT`, `SESSION_SECRET`) + 3 opcionales (`NEXT_PUBLIC_APP_URL`, `CRON_SECRET`, `ADMIN_TELEFONO`).
+- Cron `resumen-morosos` se dispara **manualmente** vía curl con el `CRON_SECRET` (no hay scheduler en `vercel.json` aún — opción C en el roadmap).
 
 ---
 
@@ -169,8 +176,8 @@ Estas reglas las define `CLAUDE.md`; aquí solo las recordamos para que no se pi
 
 ## 6. Próximos pasos (orden sugerido)
 
-1. **Push a GitHub + deploy a Vercel** — todo lo que falta es manual de Carlos (ver `README-DEPLOY.md`).
-2. **Lint en CI** — decidir si configurar `eslint` v9 + flat config con `eslint-config-next`, o seguir sin lint.
+1. **Lint en CI** — decidir si configurar `eslint` v9 + flat config con `eslint-config-next`, o seguir sin lint.
+2. **Cron automático en Vercel** (opcional) — si más adelante quieres que el resumen de morosos se dispare solo, agregar sección `crons` en `vercel.json` con `path: /api/cron/resumen-morosos`. Hoy se invoca manual.
 3. **Plantillas WhatsApp editables** — 5 plantillas (cobranza, recordatorio, anuncio, bienvenida, confirmación de pago) con variables `{nombre}`, `{monto_total}`, etc. Editables desde `/plantillas` sin redeploy.
 4. **Dashboard de pagos intuitivo** — vista grilla matriz socios×meses + vista por socio con timeline, click en celda para registrar pago, filtros rápidos por período, gráfico de recaudación histórica.
 5. **Backup/restore JSON** — descargar y restaurar todo el estado del sistema desde `/backup`. Recomendado antes de cambios riesgosos (ej. importar masivo, ajustes manuales).
