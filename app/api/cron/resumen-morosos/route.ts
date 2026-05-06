@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
   const totalAdeudado = summary.morososDetalle.reduce((s, m) => s + m.montoAdeudado, 0);
 
   const lineas = summary.morososDetalle.map((m) => {
-    const ultimo = m.mesesAdeudados[m.mesesAdeudados.length - 1];
-    return `• ${m.socio.nombre} — ${m.mesesAdeudados.length} mes(es) desde ${formatMes(ultimo)} — ${formatCLP(m.montoAdeudado)}`;
+    const primero = m.mesesAdeudados[0];
+    return `• ${m.socio.nombre} — ${m.mesesAdeudados.length} mes(es) desde ${formatMes(primero)} — ${formatCLP(m.montoAdeudado)}`;
   });
 
   const mensaje = [
