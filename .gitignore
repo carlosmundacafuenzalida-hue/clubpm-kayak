@@ -22,6 +22,9 @@
 .DS_Store
 *.pem
 
+# documentos internos (planes, .docx) — no van al repo
+documentos y planes/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

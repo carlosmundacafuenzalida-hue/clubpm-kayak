@@ -130,6 +130,9 @@ SESSION_SECRET=<32+ chars random>
 - Tests + CI con GitHub Actions
 - **Plantillas WhatsApp editables + envío masivo** (5 plantillas: cobranza, recordatorio, anuncio, bienvenida, confirmación de pago, todas con variables `{nombre}`, `{monto_total}`, etc., editables sin redeploy desde `/plantillas`)
 - **Dashboard de pagos intuitivo** (vista grilla matriz socios×meses + vista por socio con timeline, click en celda para registrar pago, filtros rápidos por período, gráfico de recaudación histórica)
+- **Backup/restore JSON** (descargar y restaurar todo el estado del sistema desde `/backup`, recomendado antes de cambios riesgosos)
+- **Excepciones de cuota por socio** (tabla `excepciones_cuota` para excluir meses específicos del cálculo de morosidad: ingreso tardío, licencia, lesión, beca, otro — gestionables desde `/socios/[id]`)
+- **Editar/eliminar cuotas en /configuracion** (corrección de montos mal cargados, eliminación segura — bloqueada si hay pagos asociados)
 
 ## Reglas para Claude Code
 
