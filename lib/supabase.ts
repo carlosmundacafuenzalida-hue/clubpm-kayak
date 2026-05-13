@@ -36,6 +36,16 @@ export type Movimiento = {
   creado_por: string;
 };
 
+export type AjusteCuota = {
+  id: string;
+  socio_id: string;
+  mes: string;          // 'YYYY-MM-01'
+  monto: number;
+  glosa: string;
+  creado_en: string;
+  creado_por: string;
+};
+
 /**
  * Cliente de browser - usa la Publishable key (pública).
  * RLS protege los datos según las policies de la base.
