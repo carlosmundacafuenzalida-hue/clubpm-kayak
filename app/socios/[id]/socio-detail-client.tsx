@@ -108,6 +108,48 @@ export function SocioDetailClient({
     }
   }
 
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkDesde, setBulkDesde] = useState('');
+  const [bulkHasta, setBulkHasta] = useState('');
+  const [bulkMonto, setBulkMonto] = useState('0');
+  const [bulkGlosa, setBulkGlosa] = useState('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  async function guardarBulk() {
+    if (!bulkDesde || !bulkHasta) { alert('Selecciona ambos meses'); return; }
+    if (bulkHasta < bulkDesde) { alert('mes_hasta debe ser >= mes_desde'); return; }
+    if (bulkGlosa.trim().length === 0) { alert('Glosa obligatoria'); return; }
+    const monto = Number(bulkMonto);
+    if (!Number.isFinite(monto) || monto < 0) { alert('Monto inválido'); return; }
+
+    setBulkSaving(true);
+    try {
+      const r = await fetch('/api/ajustes/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          socio_id: socio.id,
+          mes_desde: bulkDesde,
+          mes_hasta: bulkHasta,
+          monto,
+          glosa: bulkGlosa.trim(),
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Error guardando');
+      setAjustes((prev) => {
+        const fueraDelRango = prev.filter((a) => a.mes < bulkDesde || a.mes > bulkHasta);
+        return [...fueraDelRango, ...(j.ajustes as AjusteCuota[])];
+      });
+      setBulkOpen(false);
+      setBulkDesde(''); setBulkHasta(''); setBulkMonto('0'); setBulkGlosa('');
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
   const estado = calcularEstado(socio, movimientos, cuotas, ajustes);
   const initials = socio.nombre.split(' ').slice(0, 2).map((s) => s[0]).join('').toUpperCase();
   const totalPagado = movimientos
@@ -136,6 +178,14 @@ export function SocioDetailClient({
               <h1 className="font-display text-4xl font-medium text-bosque -tracking-[0.02em] leading-none">
                 {socio.nombre}
               </h1>
+              <button
+                type="button"
+                onClick={() => setBulkOpen(true)}
+                className="btn btn-ghost text-xs px-3.5 py-2"
+                title="Aplicar ajuste a un rango de meses"
+              >
+                Ajuste por rango…
+              </button>
               <a
                 href={`/api/reportes/socio/${socio.id}`}
                 className="btn btn-ghost text-xs px-3.5 py-2"
@@ -333,6 +383,47 @@ export function SocioDetailClient({
                     {guardandoAjuste ? 'Guardando…' : 'Guardar'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {bulkOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-[460px] max-w-full">
+              <h2 className="font-display text-xl font-medium text-bosque mb-1">
+                Ajuste por rango — <em className="italic text-verde">{socio.nombre}</em>
+              </h2>
+              <p className="text-xs text-muted mb-4">Crea un ajuste con el mismo monto y glosa para todos los meses del rango. Reemplaza ajustes existentes.</p>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-mono text-ink-soft mb-1">Mes desde</label>
+                  <select value={bulkDesde} onChange={(e) => setBulkDesde(e.target.value)} className="w-full border border-line rounded px-2 py-2 text-sm font-mono" disabled={bulkSaving}>
+                    <option value="">—</option>
+                    {ultimosMeses(48).map((m) => <option key={m} value={m}>{formatMes(m)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-ink-soft mb-1">Mes hasta</label>
+                  <select value={bulkHasta} onChange={(e) => setBulkHasta(e.target.value)} className="w-full border border-line rounded px-2 py-2 text-sm font-mono" disabled={bulkSaving}>
+                    <option value="">—</option>
+                    {ultimosMeses(48).map((m) => <option key={m} value={m}>{formatMes(m)}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <label className="block text-xs font-mono text-ink-soft mb-1">Monto por mes</label>
+              <input type="number" min={0} value={bulkMonto} onChange={(e) => setBulkMonto(e.target.value)} className="w-full border border-line rounded px-3 py-2 mb-3 font-mono" disabled={bulkSaving} />
+
+              <label className="block text-xs font-mono text-ink-soft mb-1">Glosa</label>
+              <textarea value={bulkGlosa} onChange={(e) => setBulkGlosa(e.target.value)} rows={3} className="w-full border border-line rounded px-3 py-2 mb-4" disabled={bulkSaving} />
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setBulkOpen(false)} disabled={bulkSaving} className="btn btn-ghost text-xs px-3 py-2">Cancelar</button>
+                <button onClick={guardarBulk} disabled={bulkSaving} className="btn btn-primary text-xs px-3 py-2">
+                  {bulkSaving ? 'Guardando…' : 'Crear ajustes'}
+                </button>
               </div>
             </div>
           </div>
