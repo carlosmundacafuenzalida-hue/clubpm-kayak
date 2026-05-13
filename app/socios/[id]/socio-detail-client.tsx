@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { Socio, Movimiento, CuotaConfig, AjusteCuota } from '@/lib/supabase';
-import { calcularEstado, formatCLP, formatMes } from '@/lib/movimientos';
+import { calcularEstado, formatCLP, formatMes, ultimosMeses } from '@/lib/movimientos';
 import { formatRut } from '@/lib/rut';
 import { Navbar } from '@/components/navbar';
 
@@ -48,15 +48,71 @@ export function SocioDetailClient({
     }
   }
 
+  type ModalState = { mes: string; cuotaGlobal: number; existente: AjusteCuota | null } | null;
+  const [modalAjuste, setModalAjuste] = useState<ModalState>(null);
+  const [montoInput, setMontoInput] = useState('');
+  const [glosaInput, setGlosaInput] = useState('');
+  const [guardandoAjuste, setGuardandoAjuste] = useState(false);
+
+  function abrirModalAjuste(mes: string) {
+    const cuota = cuotas.find((c) => c.mes === mes);
+    const existente = ajustes.find((a) => a.mes === mes) ?? null;
+    setMontoInput(existente ? String(existente.monto) : String(cuota?.monto ?? 0));
+    setGlosaInput(existente?.glosa ?? '');
+    setModalAjuste({ mes, cuotaGlobal: cuota?.monto ?? 0, existente });
+  }
+
+  async function guardarAjuste() {
+    if (!modalAjuste) return;
+    if (glosaInput.trim().length === 0) { alert('Glosa obligatoria'); return; }
+    const monto = Number(montoInput);
+    if (!Number.isFinite(monto) || monto < 0) { alert('Monto inválido'); return; }
+
+    setGuardandoAjuste(true);
+    try {
+      const r = await fetch('/api/ajustes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ socio_id: socio.id, mes: modalAjuste.mes, monto, glosa: glosaInput.trim() }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Error guardando');
+      setAjustes((prev) => {
+        const sin = prev.filter((a) => a.mes !== modalAjuste.mes);
+        return [...sin, j.ajuste];
+      });
+      setModalAjuste(null);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setGuardandoAjuste(false);
+    }
+  }
+
+  async function eliminarAjuste() {
+    if (!modalAjuste?.existente) return;
+    if (!confirm('Eliminar este ajuste y volver al monto global de la cuota?')) return;
+    setGuardandoAjuste(true);
+    try {
+      const r = await fetch(`/api/ajustes?id=${encodeURIComponent(modalAjuste.existente.id)}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || 'Error eliminando');
+      }
+      setAjustes((prev) => prev.filter((a) => a.id !== modalAjuste.existente!.id));
+      setModalAjuste(null);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setGuardandoAjuste(false);
+    }
+  }
+
   const estado = calcularEstado(socio, movimientos, cuotas, ajustes);
   const initials = socio.nombre.split(' ').slice(0, 2).map((s) => s[0]).join('').toUpperCase();
   const totalPagado = movimientos
     .filter((m) => m.tipo === 'pago_cuota' || m.tipo === 'pago_extra')
     .reduce((s, m) => s + Number(m.monto), 0);
-
-  // setAjustes will be wired up in Tasks 13-14 (ajuste modal, bulk modal).
-  // Suppress unused-var lint by referencing it in a void expression — it's load-bearing for upcoming tasks.
-  void setAjustes;
 
   return (
     <div className="min-h-screen bg-paper">
@@ -157,10 +213,28 @@ export function SocioDetailClient({
             </div>
             <div className="px-7 py-5 flex gap-2 flex-wrap">
               {estado.mesesAdeudados.map((mes) => (
-                <span key={mes} className="px-3 py-1.5 bg-rojo-soft text-rojo rounded-full font-mono text-xs font-medium">
+                <button
+                  key={mes}
+                  type="button"
+                  onClick={() => abrirModalAjuste(mes)}
+                  className="px-3 py-1.5 bg-rojo-soft text-rojo rounded-full font-mono text-xs font-medium hover:bg-rojo hover:text-white transition"
+                  title="Ajustar este mes"
+                >
                   {formatMes(mes)}
-                </span>
+                </button>
               ))}
+            </div>
+            <div className="px-7 pb-5 -mt-1">
+              <select
+                onChange={(e) => { if (e.target.value) { abrirModalAjuste(e.target.value); e.target.value = ''; } }}
+                className="border border-line rounded px-2 py-1 text-xs font-mono"
+                defaultValue=""
+              >
+                <option value="" disabled>Ajustar otro mes…</option>
+                {ultimosMeses(36).map((m) => (
+                  <option key={m} value={m}>{formatMes(m)}</option>
+                ))}
+              </select>
             </div>
           </div>
         )}
@@ -214,6 +288,55 @@ export function SocioDetailClient({
             })
           )}
         </div>
+
+        {modalAjuste && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-6 w-[420px] max-w-full">
+              <h2 className="font-display text-xl font-medium text-bosque mb-1">
+                Ajustar cuota de <em className="italic text-verde">{formatMes(modalAjuste.mes)}</em>
+              </h2>
+              <p className="text-xs text-muted mb-4">Cuota global del mes: {formatCLP(modalAjuste.cuotaGlobal)}</p>
+
+              <label className="block text-xs font-mono text-ink-soft mb-1">Monto adeudado por este socio</label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={montoInput}
+                onChange={(e) => setMontoInput(e.target.value)}
+                className="w-full border border-line rounded px-3 py-2 mb-3 font-mono"
+                disabled={guardandoAjuste}
+              />
+              <p className="text-[11px] text-muted -mt-2 mb-3">Pone 0 para anular la deuda de este mes.</p>
+
+              <label className="block text-xs font-mono text-ink-soft mb-1">Glosa (obligatoria)</label>
+              <textarea
+                value={glosaInput}
+                onChange={(e) => setGlosaInput(e.target.value)}
+                rows={3}
+                className="w-full border border-line rounded px-3 py-2 mb-4"
+                placeholder="Ej: lesión hasta dic 2025; beca media por situación familiar; etc."
+                disabled={guardandoAjuste}
+              />
+
+              <div className="flex justify-between gap-2">
+                {modalAjuste.existente ? (
+                  <button onClick={eliminarAjuste} disabled={guardandoAjuste} className="btn btn-ghost text-xs px-3 py-2 text-rojo">
+                    Eliminar ajuste
+                  </button>
+                ) : <span />}
+                <div className="flex gap-2">
+                  <button onClick={() => setModalAjuste(null)} disabled={guardandoAjuste} className="btn btn-ghost text-xs px-3 py-2">
+                    Cancelar
+                  </button>
+                  <button onClick={guardarAjuste} disabled={guardandoAjuste} className="btn btn-primary text-xs px-3 py-2">
+                    {guardandoAjuste ? 'Guardando…' : 'Guardar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
