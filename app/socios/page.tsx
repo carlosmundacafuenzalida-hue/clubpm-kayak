@@ -25,7 +25,7 @@ export default async function SociosPage() {
 
   // Para cada socio calculamos su estado
   const sociosConEstado = socios.map((s) => {
-    const r = calcularEstado(s, movimientos, cuotas, mes);
+    const r = calcularEstado(s, movimientos, cuotas, [], mes);
     const ultimoPago = movimientos
       .filter((m) => m.socio_id === s.id && m.tipo === 'pago_cuota')
       .sort((a, b) => b.fecha_registro.localeCompare(a.fecha_registro))[0];

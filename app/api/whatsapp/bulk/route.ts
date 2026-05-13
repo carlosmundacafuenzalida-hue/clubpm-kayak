@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const r = calcularEstado(socio, movimientos, cuotas);
+    const r = calcularEstado(socio, movimientos, cuotas, []);
     if (r.mesesAdeudados.length === 0) {
       skipped.push({ socio_id: socio.id, nombre: socio.nombre, motivo: 'sin_deuda' });
       continue;

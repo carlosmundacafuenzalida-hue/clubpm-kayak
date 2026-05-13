@@ -51,7 +51,7 @@ function makeAjuste(socioId: string, mes: string, monto: number, glosa = 'test')
 describe('calcularEstado', () => {
   it('socio inactivo → estado "inactivo"', () => {
     const socio = makeSocio({ activo: false, fecha_ingreso: '2023-01-01' });
-    const r = calcularEstado(socio, [], [], '2024-09-01');
+    const r = calcularEstado(socio, [], [], [], '2024-09-01');
     expect(r.estado).toBe('inactivo');
     expect(r.mesesAdeudados).toEqual([]);
     expect(r.montoAdeudado).toBe(0);
@@ -61,7 +61,7 @@ describe('calcularEstado', () => {
     const socio = makeSocio({ fecha_ingreso: '2024-09-01' });
     const movs = [makePago({ mes_cuota: '2024-09-01', fecha_registro: '2024-09-05' })];
     const cuotas = [makeCuota('2024-09-01')];
-    const r = calcularEstado(socio, movs, cuotas, '2024-09-01');
+    const r = calcularEstado(socio, movs, cuotas, [], '2024-09-01');
     expect(r.estado).toBe('al_dia');
     expect(r.mesesAdeudados).toEqual([]);
     expect(r.montoAdeudado).toBe(0);
@@ -79,7 +79,7 @@ describe('calcularEstado', () => {
       makeCuota('2024-08-01'),
       makeCuota('2024-09-01'),
     ];
-    const r = calcularEstado(socio, movs, cuotas, '2024-09-01');
+    const r = calcularEstado(socio, movs, cuotas, [], '2024-09-01');
     expect(r.estado).toBe('pendiente');
     expect(r.mesesAdeudados).toEqual([]);
   });
@@ -92,7 +92,7 @@ describe('calcularEstado', () => {
       makeCuota('2024-08-01', 10000),
       makeCuota('2024-09-01', 10000),
     ];
-    const r = calcularEstado(socio, [], cuotas, '2024-09-01');
+    const r = calcularEstado(socio, [], cuotas, [], '2024-09-01');
     expect(r.estado).toBe('moroso');
     expect(r.mesesAdeudados).toHaveLength(2);
     expect(r.mesesAdeudados).toEqual(['2024-07-01', '2024-08-01']);
@@ -106,7 +106,7 @@ describe('calcularEstado', () => {
     const socio = makeSocio({ fecha_ingreso: '2024-08-01' });
     const cuotas = [makeCuota('2024-08-01'), makeCuota('2024-09-01')];
 
-    const r = calcularEstado(socio, [], cuotas, '2024-09-01');
+    const r = calcularEstado(socio, [], cuotas, [], '2024-09-01');
 
     expect(r.mesesAdeudados).not.toContain('2024-07-01');
     expect(r.mesesAdeudados).toEqual(['2024-08-01']);
@@ -119,7 +119,7 @@ describe('calcularEstado', () => {
     const socio = makeSocio({ fecha_ingreso: '2024-08-31' });
     const cuotas = [makeCuota('2024-08-01'), makeCuota('2024-09-01')];
 
-    const r = calcularEstado(socio, [], cuotas, '2024-09-01');
+    const r = calcularEstado(socio, [], cuotas, [], '2024-09-01');
 
     // El socio debe deber agosto (su mes de ingreso), no estar inscrito en septiembre.
     expect(r.mesesAdeudados).toEqual(['2024-08-01']);
@@ -131,7 +131,7 @@ describe('calcularEstado', () => {
     const socio = makeSocio({ fecha_ingreso: '2024-08-01' });
     const cuotas = [makeCuota('2024-08-01'), makeCuota('2024-09-01'), makeCuota('2024-10-01')];
 
-    const r = calcularEstado(socio, [], cuotas, '2024-10-01');
+    const r = calcularEstado(socio, [], cuotas, [], '2024-10-01');
 
     expect(r.mesesAdeudados).toEqual(['2024-08-01', '2024-09-01']);
     expect(r.estado).toBe('moroso');

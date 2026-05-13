@@ -45,7 +45,7 @@ export default async function MiPage({
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
 
-  const estado = calcularEstado(socio, movimientos, cuotas);
+  const estado = calcularEstado(socio, movimientos, cuotas, []);
   const initials = socio.nombre.split(' ').slice(0, 2).map((s) => s[0]).join('').toUpperCase();
   const totalPagado = movimientos
     .filter((m) => m.tipo === 'pago_cuota' || m.tipo === 'pago_extra')

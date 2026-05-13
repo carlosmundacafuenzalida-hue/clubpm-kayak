@@ -1,4 +1,4 @@
-import type { Movimiento, Socio, CuotaConfig } from './supabase';
+import type { Movimiento, Socio, CuotaConfig, AjusteCuota } from './supabase';
 
 /** Mes en formato 'YYYY-MM-01' (primer día del mes). */
 export function mesActual(): string {
@@ -42,11 +42,15 @@ export type EstadoSocio = 'al_dia' | 'pendiente' | 'moroso' | 'inactivo' | 'beca
  * - Moroso: meses adeudados >= 1 (cuenta meses pasados sin pago)
  * - Pendiente: este mes aún no paga, pero está al día con meses anteriores
  * - Al día: pagó este mes
+ *
+ * Ajustes: si hay ajuste para (socio, mes), su monto reemplaza al de cuotasConfig.
+ * monto=0 anula la deuda del mes (lo omite del cálculo de morosidad).
  */
 export function calcularEstado(
   socio: Socio,
   movimientos: Movimiento[],
   cuotasConfig: CuotaConfig[],
+  ajustes: AjusteCuota[],
   mesReferencia: string = mesActual()
 ): { estado: EstadoSocio; mesesAdeudados: string[]; montoAdeudado: number } {
   if (!socio.activo) {
@@ -55,10 +59,8 @@ export function calcularEstado(
 
   const ingreso = socio.fecha_ingreso.slice(0, 7) + '-01';
 
-  // Lista de meses que el socio debió pagar (desde su ingreso hasta el mes de referencia).
-  // Importante: T12:00:00 evita que el timezone tire la fecha al día anterior.
   const mesesEsperados: string[] = [];
-  let cursor = new Date(ingreso + 'T12:00:00');
+  const cursor = new Date(ingreso + 'T12:00:00');
   const fin = new Date(mesReferencia + 'T12:00:00');
   while (cursor <= fin) {
     mesesEsperados.push(
@@ -67,30 +69,40 @@ export function calcularEstado(
     cursor.setMonth(cursor.getMonth() + 1);
   }
 
-  // Pagos del socio (tipo pago_cuota) agrupados por mes_cuota.
   const mesesPagados = new Set(
     movimientos
       .filter((m) => m.socio_id === socio.id && m.tipo === 'pago_cuota' && m.mes_cuota)
       .map((m) => m.mes_cuota as string)
   );
 
-  // Meses del pasado adeudados (sin contar el mes actual).
-  const mesesAdeudados = mesesEsperados
-    .filter((m) => m < mesReferencia && !mesesPagados.has(m));
+  const ajustesPorMes = new Map<string, AjusteCuota>();
+  for (const a of ajustes) {
+    if (a.socio_id === socio.id) ajustesPorMes.set(a.mes, a);
+  }
 
-  const montoAdeudado = mesesAdeudados.reduce((sum, mes) => {
-    const config = cuotasConfig.find((c) => c.mes === mes);
-    return sum + (config?.monto ?? 0);
-  }, 0);
+  const mesesAdeudados: string[] = [];
+  let montoAdeudado = 0;
+
+  for (const mes of mesesEsperados) {
+    if (mes >= mesReferencia) continue;
+    if (mesesPagados.has(mes)) continue;
+    const ajuste = ajustesPorMes.get(mes);
+    if (ajuste && ajuste.monto === 0) continue;
+
+    const monto = ajuste
+      ? ajuste.monto
+      : (cuotasConfig.find((c) => c.mes === mes)?.monto ?? 0);
+
+    mesesAdeudados.push(mes);
+    montoAdeudado += monto;
+  }
 
   if (mesesAdeudados.length > 0) {
     return { estado: 'moroso', mesesAdeudados, montoAdeudado };
   }
-
   if (mesesPagados.has(mesReferencia)) {
     return { estado: 'al_dia', mesesAdeudados: [], montoAdeudado: 0 };
   }
-
   return { estado: 'pendiente', mesesAdeudados: [], montoAdeudado: 0 };
 }
 
@@ -122,7 +134,7 @@ export function calcularDashboard(
   const morososDetalle: DashboardSummary['morososDetalle'] = [];
 
   for (const socio of socios) {
-    const r = calcularEstado(socio, movimientos, cuotasConfig, mes);
+    const r = calcularEstado(socio, movimientos, cuotasConfig, [], mes);
     if (r.estado === 'inactivo') { inactivos++; continue; }
     sociosActivos++;
     if (r.estado === 'al_dia') pagaronEsteMes++;
