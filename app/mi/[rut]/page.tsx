@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { calcularEstado, formatCLP, formatMes } from '@/lib/movimientos';
 import { formatRut, normalizeRut } from '@/lib/rut';
 import { MiniHeader } from '@/components/mini-header';
@@ -33,19 +33,22 @@ export default async function MiPage({
 
   const socio = socioData as Socio;
 
-  const [movsRes, cuotasRes] = await Promise.all([
+  const [movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase
       .from('movimientos')
       .select('*')
       .eq('socio_id', socio.id)
       .order('fecha_registro', { ascending: false }),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*').eq('socio_id', socio.id),
   ]);
 
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
+  const ajustePorMes = new Map(ajustes.map((a) => [a.mes, a]));
 
-  const estado = calcularEstado(socio, movimientos, cuotas, []);
+  const estado = calcularEstado(socio, movimientos, cuotas, ajustes);
   const initials = socio.nombre.split(' ').slice(0, 2).map((s) => s[0]).join('').toUpperCase();
   const totalPagado = movimientos
     .filter((m) => m.tipo === 'pago_cuota' || m.tipo === 'pago_extra')
@@ -116,8 +119,13 @@ export default async function MiPage({
             </div>
             <div className="px-7 py-5 flex gap-2 flex-wrap">
               {estado.mesesAdeudados.map((mes) => (
-                <span key={mes} className="px-3 py-1.5 bg-rojo-soft text-rojo rounded-full font-mono text-xs font-medium">
+                <span key={mes} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rojo-soft text-rojo rounded-full font-mono text-xs font-medium">
                   {formatMes(mes)}
+                  {ajustePorMes.has(mes) && (
+                    <span className="text-[10px] uppercase tracking-wider text-kayak-deep bg-kayak-soft rounded px-1">
+                      ajustado
+                    </span>
+                  )}
                 </span>
               ))}
             </div>
@@ -137,8 +145,13 @@ export default async function MiPage({
             </div>
             <div className="px-7 py-5 flex gap-2 flex-wrap">
               {mesesPagados.map((mes) => (
-                <span key={mes} className="px-3 py-1.5 bg-verde-tint text-verde rounded-full font-mono text-xs font-medium">
+                <span key={mes} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-verde-tint text-verde rounded-full font-mono text-xs font-medium">
                   {formatMes(mes)}
+                  {ajustePorMes.has(mes) && (
+                    <span className="text-[10px] uppercase tracking-wider text-kayak-deep bg-kayak-soft rounded px-1">
+                      ajustado
+                    </span>
+                  )}
                 </span>
               ))}
             </div>
