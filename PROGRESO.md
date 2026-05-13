@@ -4,7 +4,7 @@
 > Si llegas como Claude (o como dev nuevo): leyendo este archivo deberías
 > entender qué está hecho, qué quedó pendiente y por qué se decidió cada cosa.
 
-Última actualización: **2026-05-05**
+Última actualización: **2026-05-12**
 
 ---
 
@@ -25,7 +25,9 @@
 | Importación Excel             | ✅ Listo   | Endpoints separados de socios y de pagos                     |
 | Exportación Excel             | ✅ Listo   | Reportes de socios, recaudación y detalle por socio          |
 | Cron resumen morosos          | ✅ Listo   | `/api/cron/resumen-morosos` protegido por `CRON_SECRET`      |
-| Tests unitarios               | ✅ Listo   | Vitest, 22 casos en `lib/__tests__/`                         |
+| Ajustes de cuota por socio    | ✅ Listo   | Tabla `ajustes_cuota` con override por (socio, mes); UI individual + bulk; honrado en cálculo, cron, vista pública y reportes |
+| Editar `fecha_ingreso` socio  | ✅ Listo   | Botón inline en `/socios/[id]` → `PATCH /api/socios/[id]`    |
+| Tests unitarios               | ✅ Listo   | Vitest, 26 casos en `lib/__tests__/`                         |
 | CI                            | ✅ Listo   | GitHub Actions: typecheck + test + build en push/PR a main   |
 | Deploy a Vercel               | ✅ Listo   | Live en <https://clubpm-kayak.vercel.app>. Repo en `carlosmundacafuenzalida-hue/clubpm-kayak` |
 | Plantillas WhatsApp editables | ⛔ Pendiente | Mencionado en CLAUDE.md como Fase 3                          |
@@ -161,6 +163,19 @@ README-DEPLOY.md                  ← guía manual de deploy
 - **Fix mensaje cron (`09a4451`):** el resumen mostraba `desde {último mes adeudado}` cuando lo correcto era `desde {primer mes adeudado}`. Cambio en `app/api/cron/resumen-morosos/route.ts:44` de `[length-1]` a `[0]`.
 - Verificación end-to-end: 24 morosos detectados, total $2.163.000, `admin_url` apuntando a `wa.me/56977779177` con el mensaje pre-cargado, recibido en WhatsApp del admin.
 
+### Sprint 8 — Ajustes de cuota por socio + edición de `fecha_ingreso` (commits `e7e2e45` … `11a54bb`, branch `feat/ajustes-cuota`)
+
+Resuelve dos casos reales documentados en el spec: Patricio Lagos (21 meses morosos por una mudanza que el club no condonó en `cuotas_config`) y Juan Landaeta (12 meses morosos porque su `fecha_ingreso` quedó mal cargada).
+
+- **DB:** nueva tabla `ajustes_cuota` (`socio_id, mes, monto numeric(10,2), glosa text not null, creado_en, creado_por, unique(socio_id, mes)`) con 4 RLS policies abiertas (mismo patrón que `socios`/`movimientos`). Migración manual en `db/2026-05-06_ajustes_cuota.sql`.
+- **Lógica:** `calcularEstado` y `calcularDashboard` aceptan `ajustes: AjusteCuota[]` como parámetro. Si hay ajuste para `(socio, mes)` se sustituye el monto; si `monto = 0` el mes se omite del cálculo de morosidad. Cubierto por 4 nuevos tests (incluido el caso Patricio).
+- **API:** `GET/POST(upsert)/DELETE /api/ajustes`, `POST /api/ajustes/bulk` (expansión de rango), `PATCH /api/socios/[id]` (con validación de `fecha_ingreso`).
+- **UI:** detalle del socio refactorizado a Client Component (`socio-detail-client.tsx`). Header con botón inline para editar `fecha_ingreso`. Botón "Ajuste por rango" → modal bulk. Badges de meses adeudados son ahora `<button>` que abren un modal individual (crear/editar/eliminar ajuste con monto + glosa obligatoria). Selector "Ajustar otro mes…" para meses no morosos.
+- **Vista pública `/mi/[rut]`:** badge sutil "ajustado" en meses con override (sin mostrar glosa ni monto, decisión por privacidad).
+- **Propagación:** los 8 callers server-side de `calcularEstado`/`calcularDashboard`/`generarReporteSocios` cargan `ajustes_cuota` desde DB (cron, dashboard, listado de socios, detalle, vista pública, whatsapp/bulk, reportes Excel).
+- **Modo de ejecución:** Subagent-Driven Development. 16 tareas en TDD con dispatch de implementer + 2 reviewers (spec compliance + code quality) por task. Modelo haiku en todas. Branch `feat/ajustes-cuota` listo para PR a `main`.
+- Tests al cierre: 26/26 ✅. Typecheck + build verdes.
+
 ---
 
 ## 5. Reglas críticas del proyecto (no inventar paralelas)
@@ -184,11 +199,10 @@ Estas reglas las define `CLAUDE.md`; aquí solo las recordamos para que no se pi
 3. **Plantillas WhatsApp editables** — 5 plantillas (cobranza, recordatorio, anuncio, bienvenida, confirmación de pago) con variables `{nombre}`, `{monto_total}`, etc. Editables desde `/plantillas` sin redeploy.
 4. **Dashboard de pagos intuitivo** — vista grilla matriz socios×meses + vista por socio con timeline, click en celda para registrar pago, filtros rápidos por período, gráfico de recaudación histórica.
 5. **Backup/restore JSON** — descargar y restaurar todo el estado del sistema desde `/backup`. Recomendado antes de cambios riesgosos (ej. importar masivo, ajustes manuales).
-6. **Excepciones de cuota por socio** — nueva tabla `excepciones_cuota` para excluir meses específicos del cálculo de morosidad: ingreso tardío, licencia, lesión, beca, otro. Gestionables desde `/socios/[id]`. Implica modificar `calcularEstado()` para honrar las excepciones.
-7. **Editar/eliminar cuotas en `/configuracion`** — corrección de montos mal cargados, eliminación segura (bloqueada si hay pagos asociados).
-8. **Cron real de notificaciones** — hoy `resumen-morosos` solo arma el mensaje al admin. Falta evaluar enviar mensajes individuales a socios automáticamente (requiere API oficial de WhatsApp Business o seguir con `wa.me` manual).
-9. **Tests de componentes React** — la infra ya está (jsdom + testing-library). Pendiente cubrir `RutInput`, `PinInput`, formulario de pago.
-10. **RLS en Supabase** — revisar que todas las tablas tengan policies. Hoy la auth pasa por la cookie del middleware, pero conviene defensa en profundidad.
+6. **Editar/eliminar cuotas globales en `/configuracion`** — corrección de montos de `cuotas_config` (el monto base por mes para todo el club), eliminación segura bloqueada si hay pagos asociados. Distinto de los `ajustes_cuota` por socio que ya están implementados en Sprint 8.
+7. **Cron real de notificaciones** — hoy `resumen-morosos` solo arma el mensaje al admin. Falta evaluar enviar mensajes individuales a socios automáticamente (requiere API oficial de WhatsApp Business o seguir con `wa.me` manual).
+8. **Tests de componentes React** — la infra ya está (jsdom + testing-library). Pendiente cubrir `RutInput`, `PinInput`, formulario de pago, modales de ajuste.
+9. **RLS en Supabase** — revisar que todas las tablas tengan policies. Hoy la auth pasa por la cookie del middleware, pero conviene defensa en profundidad.
 
 ---
 
