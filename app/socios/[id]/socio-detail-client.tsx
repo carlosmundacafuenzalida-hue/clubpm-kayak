@@ -24,6 +24,29 @@ export function SocioDetailClient({
 }: Props) {
   const [socio, setSocio] = useState(socioInicial);
   const [ajustes, setAjustes] = useState(ajustesIniciales);
+  const [editandoFecha, setEditandoFecha] = useState(false);
+  const [nuevaFecha, setNuevaFecha] = useState(socio.fecha_ingreso);
+  const [guardandoFecha, setGuardandoFecha] = useState(false);
+
+  async function guardarFechaIngreso() {
+    if (!confirm('Cambiar la fecha de ingreso afecta el cálculo histórico de morosidad. ¿Continuar?')) return;
+    setGuardandoFecha(true);
+    try {
+      const r = await fetch(`/api/socios/${socio.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha_ingreso: nuevaFecha }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Error guardando');
+      setSocio(j.socio);
+      setEditandoFecha(false);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setGuardandoFecha(false);
+    }
+  }
 
   const estado = calcularEstado(socio, movimientos, cuotas, ajustes);
   const initials = socio.nombre.split(' ').slice(0, 2).map((s) => s[0]).join('').toUpperCase();
@@ -31,9 +54,8 @@ export function SocioDetailClient({
     .filter((m) => m.tipo === 'pago_cuota' || m.tipo === 'pago_extra')
     .reduce((s, m) => s + Number(m.monto), 0);
 
-  // setSocio and setAjustes will be wired up in Tasks 12-14 (edit fecha_ingreso, ajuste modal, bulk modal).
-  // Suppress unused-var lint by referencing them in a void expression — they're load-bearing for upcoming tasks.
-  void setSocio;
+  // setAjustes will be wired up in Tasks 13-14 (ajuste modal, bulk modal).
+  // Suppress unused-var lint by referencing it in a void expression — it's load-bearing for upcoming tasks.
   void setAjustes;
 
   return (
@@ -76,9 +98,33 @@ export function SocioDetailClient({
                 {socio.telefono ? `+${socio.telefono}` : 'Sin teléfono'}
               </span>
               <span className="text-muted">·</span>
-              <span className="text-sm text-ink-soft">
-                Ingresó {new Date(socio.fecha_ingreso + 'T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
-              </span>
+              {!editandoFecha ? (
+                <button
+                  type="button"
+                  onClick={() => { setNuevaFecha(socio.fecha_ingreso); setEditandoFecha(true); }}
+                  className="text-sm text-ink-soft hover:text-verde underline-offset-2 hover:underline"
+                  title="Editar fecha de ingreso"
+                >
+                  Ingresó {new Date(socio.fecha_ingreso + 'T12:00:00').toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={nuevaFecha}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setNuevaFecha(e.target.value)}
+                    className="border border-line rounded px-2 py-1 text-sm font-mono"
+                    disabled={guardandoFecha}
+                  />
+                  <button onClick={guardarFechaIngreso} disabled={guardandoFecha} className="btn btn-primary text-xs px-3 py-1">
+                    {guardandoFecha ? '…' : 'Guardar'}
+                  </button>
+                  <button onClick={() => setEditandoFecha(false)} disabled={guardandoFecha} className="btn btn-ghost text-xs px-3 py-1">
+                    Cancelar
+                  </button>
+                </span>
+              )}
             </div>
             <div className="mt-4 flex items-center gap-2">
               {estado.estado === 'al_dia' && <span className="badge badge-ok">Al día</span>}
