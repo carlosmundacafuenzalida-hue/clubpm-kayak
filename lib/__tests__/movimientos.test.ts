@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { calcularEstado, calcularDashboard } from '@/lib/movimientos';
-import type { Socio, Movimiento, CuotaConfig } from '@/lib/supabase';
+import type { Socio, Movimiento, CuotaConfig, AjusteCuota } from '@/lib/supabase';
 
 function makeSocio(overrides: Partial<Socio> = {}): Socio {
   return {
@@ -34,6 +34,18 @@ function makePago(overrides: Partial<Movimiento> = {}): Movimiento {
 
 function makeCuota(mes: string, monto = 10000): CuotaConfig {
   return { id: `cuota-${mes}`, mes, monto };
+}
+
+function makeAjuste(socioId: string, mes: string, monto: number, glosa = 'test'): AjusteCuota {
+  return {
+    id: `ajuste-${socioId}-${mes}`,
+    socio_id: socioId,
+    mes,
+    monto,
+    glosa,
+    creado_en: '2026-05-06T12:00:00Z',
+    creado_por: '17353638-0',
+  };
 }
 
 describe('calcularEstado', () => {
@@ -122,6 +134,24 @@ describe('calcularEstado', () => {
     const r = calcularEstado(socio, [], cuotas, '2024-10-01');
 
     expect(r.mesesAdeudados).toEqual(['2024-08-01', '2024-09-01']);
+    expect(r.estado).toBe('moroso');
+  });
+
+  it('ajuste con monto=0 omite el mes del cálculo', () => {
+    const socio = makeSocio({ id: 's-pat', fecha_ingreso: '2024-07-01' });
+    const cuotas = [
+      makeCuota('2024-07-01'),
+      makeCuota('2024-08-01'),
+      makeCuota('2024-09-01'),
+    ];
+    const ajustes = [
+      makeAjuste('s-pat', '2024-08-01', 0, 'mudanza'),
+    ];
+
+    const r = calcularEstado(socio, [], cuotas, ajustes, '2024-09-01');
+
+    expect(r.mesesAdeudados).toEqual(['2024-07-01']);
+    expect(r.mesesAdeudados).not.toContain('2024-08-01');
     expect(r.estado).toBe('moroso');
   });
 });
