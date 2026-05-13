@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/session';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { calcularEstado, formatCLP, formatMes, mesActual } from '@/lib/movimientos';
 import { formatRut } from '@/lib/rut';
 import { Navbar } from '@/components/navbar';
@@ -19,10 +19,11 @@ export default async function SocioDetailPage({
   const { id } = await params;
   const supabase = await createSupabaseServer();
 
-  const [socioRes, movsRes, cuotasRes] = await Promise.all([
+  const [socioRes, movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase.from('socios').select('*').eq('id', id).single(),
     supabase.from('movimientos').select('*').eq('socio_id', id).order('fecha_registro', { ascending: false }),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*').eq('socio_id', id),
   ]);
 
   if (socioRes.error || !socioRes.data) notFound();
@@ -30,8 +31,9 @@ export default async function SocioDetailPage({
   const socio = socioRes.data as Socio;
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
 
-  const estado = calcularEstado(socio, movimientos, cuotas, []);
+  const estado = calcularEstado(socio, movimientos, cuotas, ajustes);
   const initials = socio.nombre.split(' ').slice(0, 2).map((s) => s[0]).join('').toUpperCase();
   const totalPagado = movimientos
     .filter((m) => m.tipo === 'pago_cuota' || m.tipo === 'pago_extra')
