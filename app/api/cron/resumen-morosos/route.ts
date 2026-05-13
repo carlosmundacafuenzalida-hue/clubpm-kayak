@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { calcularDashboard, formatCLP, formatMes } from '@/lib/movimientos';
 
 export const dynamic = 'force-dynamic';
@@ -16,17 +16,19 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createSupabaseServer();
-  const [sociosRes, movsRes, cuotasRes] = await Promise.all([
+  const [sociosRes, movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase.from('socios').select('*'),
     supabase.from('movimientos').select('*'),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*'),
   ]);
 
   const socios = (sociosRes.data ?? []) as Socio[];
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
 
-  const summary = calcularDashboard(socios, movimientos, cuotas, []);
+  const summary = calcularDashboard(socios, movimientos, cuotas, ajustes);
 
   if (summary.morosos === 0) {
     return NextResponse.json({

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { calcularEstado, mesActual } from '@/lib/movimientos';
 import { Navbar } from '@/components/navbar';
 import { SociosClient } from './socios-client';
@@ -12,20 +12,22 @@ export default async function SociosPage() {
   if (!session) redirect('/login');
 
   const supabase = await createSupabaseServer();
-  const [sociosRes, movsRes, cuotasRes] = await Promise.all([
+  const [sociosRes, movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase.from('socios').select('*').order('nombre'),
     supabase.from('movimientos').select('*'),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*'),
   ]);
 
   const socios = (sociosRes.data ?? []) as Socio[];
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
   const mes = mesActual();
 
   // Para cada socio calculamos su estado
   const sociosConEstado = socios.map((s) => {
-    const r = calcularEstado(s, movimientos, cuotas, [], mes);
+    const r = calcularEstado(s, movimientos, cuotas, ajustes, mes);
     const ultimoPago = movimientos
       .filter((m) => m.socio_id === s.id && m.tipo === 'pago_cuota')
       .sort((a, b) => b.fecha_registro.localeCompare(a.fecha_registro))[0];

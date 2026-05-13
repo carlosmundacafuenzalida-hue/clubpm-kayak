@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { generarReporteSocios } from '@/lib/excel';
 
 export const dynamic = 'force-dynamic';
@@ -12,17 +12,19 @@ export async function GET() {
   }
 
   const supabase = await createSupabaseServer();
-  const [sociosRes, movsRes, cuotasRes] = await Promise.all([
+  const [sociosRes, movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase.from('socios').select('*').order('nombre'),
     supabase.from('movimientos').select('*'),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*'),
   ]);
 
   const socios = (sociosRes.data ?? []) as Socio[];
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
 
-  const buffer = await generarReporteSocios(socios, movimientos, cuotas);
+  const buffer = await generarReporteSocios(socios, movimientos, cuotas, ajustes);
   const fecha = new Date().toISOString().slice(0, 10);
 
   return new NextResponse(new Uint8Array(buffer), {

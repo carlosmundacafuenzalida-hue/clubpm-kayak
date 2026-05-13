@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { calcularEstado, formatCLP, formatMes } from '@/lib/movimientos';
 
 type BulkUrl = {
@@ -32,15 +32,17 @@ export async function POST(req: NextRequest) {
   const socioIds = ids.filter((x): x is string => typeof x === 'string');
 
   const supabase = await createSupabaseServer();
-  const [sociosRes, movsRes, cuotasRes] = await Promise.all([
+  const [sociosRes, movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase.from('socios').select('*').in('id', socioIds),
     supabase.from('movimientos').select('*'),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*').in('socio_id', socioIds),
   ]);
 
   const socios = (sociosRes.data ?? []) as Socio[];
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
 
   const urls: BulkUrl[] = [];
   const skipped: BulkSkipped[] = [];
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const r = calcularEstado(socio, movimientos, cuotas, []);
+    const r = calcularEstado(socio, movimientos, cuotas, ajustes);
     if (r.mesesAdeudados.length === 0) {
       skipped.push({ socio_id: socio.id, nombre: socio.nombre, motivo: 'sin_deuda' });
       continue;

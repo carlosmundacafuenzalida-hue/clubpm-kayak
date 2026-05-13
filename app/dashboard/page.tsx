@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
-import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig } from '@/lib/supabase';
+import { createSupabaseServer, type Socio, type Movimiento, type CuotaConfig, type AjusteCuota } from '@/lib/supabase';
 import { calcularDashboard, formatCLP } from '@/lib/movimientos';
 import { Navbar } from '@/components/navbar';
 import { DashboardClient } from './dashboard-client';
@@ -13,17 +13,19 @@ export default async function DashboardPage() {
 
   const supabase = await createSupabaseServer();
 
-  const [sociosRes, movsRes, cuotasRes] = await Promise.all([
+  const [sociosRes, movsRes, cuotasRes, ajustesRes] = await Promise.all([
     supabase.from('socios').select('*'),
     supabase.from('movimientos').select('*').order('fecha_registro', { ascending: false }).limit(500),
     supabase.from('cuotas_config').select('*'),
+    supabase.from('ajustes_cuota').select('*'),
   ]);
 
   const socios = (sociosRes.data ?? []) as Socio[];
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
+  const ajustes = (ajustesRes.data ?? []) as AjusteCuota[];
 
-  const summary = calcularDashboard(socios, movimientos, cuotas, []);
+  const summary = calcularDashboard(socios, movimientos, cuotas, ajustes);
 
   // Últimos 3 movimientos para feed de actividad
   const actividadReciente = movimientos.slice(0, 5).map((m) => {

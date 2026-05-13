@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import type { Socio, Movimiento, CuotaConfig } from './supabase';
+import type { Socio, Movimiento, CuotaConfig, AjusteCuota } from './supabase';
 import { calcularEstado, formatMes, mesActual } from './movimientos';
 import { formatRut } from './rut';
 
@@ -86,7 +86,8 @@ function parseDateLocal(yyyymmdd: string): Date {
 export async function generarReporteSocios(
   socios: Socio[],
   movimientos: Movimiento[],
-  cuotas: CuotaConfig[]
+  cuotas: CuotaConfig[],
+  ajustes: AjusteCuota[]
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Club PM Kayak';
@@ -112,7 +113,7 @@ export async function generarReporteSocios(
   const ordenados = [...socios].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
   for (const s of ordenados) {
-    const r = calcularEstado(s, movimientos, cuotas, [], mesActual());
+    const r = calcularEstado(s, movimientos, cuotas, ajustes, mesActual());
     const ultimoPago = movimientos
       .filter((m) => m.socio_id === s.id && (m.tipo === 'pago_cuota' || m.tipo === 'pago_extra'))
       .sort((a, b) => b.fecha_registro.localeCompare(a.fecha_registro))[0];
