@@ -154,6 +154,56 @@ describe('calcularEstado', () => {
     expect(r.mesesAdeudados).not.toContain('2024-08-01');
     expect(r.estado).toBe('moroso');
   });
+
+  it('ajuste con monto>0 cambia el monto adeudado del mes', () => {
+    const socio = makeSocio({ id: 's-beca', fecha_ingreso: '2024-07-01' });
+    const cuotas = [
+      makeCuota('2024-07-01', 7000),
+      makeCuota('2024-08-01', 7000),
+    ];
+    const ajustes = [
+      makeAjuste('s-beca', '2024-07-01', 3500, 'beca media'),
+    ];
+
+    const r = calcularEstado(socio, [], cuotas, ajustes, '2024-08-01');
+
+    expect(r.mesesAdeudados).toEqual(['2024-07-01']);
+    expect(r.montoAdeudado).toBe(3500);
+    expect(r.estado).toBe('moroso');
+  });
+
+  it('ajuste + pago_cuota del mismo mes deja el mes saldado', () => {
+    const socio = makeSocio({ id: 's-x', fecha_ingreso: '2024-07-01' });
+    const cuotas = [makeCuota('2024-07-01', 7000), makeCuota('2024-08-01', 7000)];
+    const ajustes = [makeAjuste('s-x', '2024-07-01', 3500, 'beca media')];
+    const movs = [
+      makePago({ socio_id: 's-x', mes_cuota: '2024-07-01', monto: 3500, fecha_registro: '2024-07-10' }),
+    ];
+
+    const r = calcularEstado(socio, movs, cuotas, ajustes, '2024-08-01');
+
+    expect(r.mesesAdeudados).toEqual([]);
+    expect(r.estado).toBe('pendiente');
+  });
+
+  it('caso Patricio: 21 ajustes a $0 → no moroso', () => {
+    const socio = makeSocio({ id: 's-pat', fecha_ingreso: '2024-08-01' });
+    const meses = [
+      '2024-08-01','2024-09-01','2024-10-01','2024-11-01','2024-12-01',
+      '2025-01-01','2025-02-01','2025-03-01','2025-04-01','2025-05-01',
+      '2025-06-01','2025-07-01','2025-08-01','2025-09-01','2025-10-01',
+      '2025-11-01','2025-12-01','2026-01-01','2026-02-01','2026-03-01',
+      '2026-04-01',
+    ];
+    const cuotas = meses.map((m) => makeCuota(m, 7000));
+    const ajustes = meses.map((m) => makeAjuste('s-pat', m, 0, 'mudanza'));
+
+    const r = calcularEstado(socio, [], cuotas, ajustes, '2026-05-01');
+
+    expect(r.mesesAdeudados).toEqual([]);
+    expect(r.montoAdeudado).toBe(0);
+    expect(r.estado).toBe('pendiente');
+  });
 });
 
 describe('calcularDashboard', () => {
@@ -189,7 +239,7 @@ describe('calcularDashboard', () => {
       makeCuota('2024-09-01'),
     ];
 
-    const r = calcularDashboard(socios, movs, cuotas);
+    const r = calcularDashboard(socios, movs, cuotas, []);
 
     expect(r.sociosActivos).toBe(2);
     expect(r.pagaronEsteMes).toBe(1);
@@ -211,7 +261,7 @@ describe('calcularDashboard', () => {
     ];
     const cuotas = [makeCuota('2024-09-01')];
 
-    const r = calcularDashboard(socios, movs, cuotas);
+    const r = calcularDashboard(socios, movs, cuotas, []);
 
     // Ahora simulado = 2024-09-15, recaudación de septiembre = solo m-sep.
     expect(r.recaudadoMes).toBe(10000);

@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
 
-  const summary = calcularDashboard(socios, movimientos, cuotas);
+  const summary = calcularDashboard(socios, movimientos, cuotas, []);
 
   if (summary.morosos === 0) {
     return NextResponse.json({

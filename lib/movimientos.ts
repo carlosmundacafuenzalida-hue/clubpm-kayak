@@ -123,7 +123,8 @@ export type DashboardSummary = {
 export function calcularDashboard(
   socios: Socio[],
   movimientos: Movimiento[],
-  cuotasConfig: CuotaConfig[]
+  cuotasConfig: CuotaConfig[],
+  ajustes: AjusteCuota[]
 ): DashboardSummary {
   const mes = mesActual();
   let sociosActivos = 0;
@@ -134,7 +135,7 @@ export function calcularDashboard(
   const morososDetalle: DashboardSummary['morososDetalle'] = [];
 
   for (const socio of socios) {
-    const r = calcularEstado(socio, movimientos, cuotasConfig, [], mes);
+    const r = calcularEstado(socio, movimientos, cuotasConfig, ajustes, mes);
     if (r.estado === 'inactivo') { inactivos++; continue; }
     sociosActivos++;
     if (r.estado === 'al_dia') pagaronEsteMes++;

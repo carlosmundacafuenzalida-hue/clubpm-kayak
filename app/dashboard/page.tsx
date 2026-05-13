@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   const movimientos = (movsRes.data ?? []) as Movimiento[];
   const cuotas = (cuotasRes.data ?? []) as CuotaConfig[];
 
-  const summary = calcularDashboard(socios, movimientos, cuotas);
+  const summary = calcularDashboard(socios, movimientos, cuotas, []);
 
   // Últimos 3 movimientos para feed de actividad
   const actividadReciente = movimientos.slice(0, 5).map((m) => {
